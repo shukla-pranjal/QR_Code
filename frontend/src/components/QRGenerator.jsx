@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import toast from 'react-hot-toast';
 import QRTemplates, { templates } from './QRTemplates';
 import LogoUploader from './LogoUploader';
@@ -88,7 +88,7 @@ export default function QRGenerator() {
         setLoading(true);
 
         try {
-            const response = await axios.post('/api/generate', {
+            const response = await api.post('/api/generate', {
                 text: textToEncode,
                 size: parseInt(formData.size),
                 fg_color: formData.fgColor,
