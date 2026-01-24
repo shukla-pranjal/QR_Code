@@ -1,5 +1,5 @@
 # Frontend Dockerfile for QR Code Generator
-FROM node:20-alpine as builder
+FROM node:20-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -7,8 +7,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --frozen-lockfile
+# Install dependencies (using legacy-peer-deps for React 19 compatibility)
+RUN npm install --legacy-peer-deps
 
 # Copy application code
 COPY . .
