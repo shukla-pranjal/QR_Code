@@ -8,59 +8,45 @@ import QRScanner from './QRScanner';
 
 export default function QRGenerator() {
     const [selectedTemplate, setSelectedTemplate] = useState(templates[0]);
+    const [selectedCategory, setSelectedCategory] = useState('all');
     const [formData, setFormData] = useState({
-        text: '',
         size: 300,
         fgColor: '#000000',
         bgColor: '#ffffff',
         errorCorrection: 'M',
         logo: null,
+        watermark: false,
     });
 
     const [qrCode, setQrCode] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState('generate'); // 'generate' or 'scan'
+    const [activeTab, setActiveTab] = useState('generate');
 
-    // Template-specific form fields
-    const [templateFields, setTemplateFields] = useState({
-        // URL
-        url: '',
-        // Text
-        text: '',
-        // WiFi
-        ssid: '',
-        password: '',
-        encryption: 'WPA',
-        // vCard
-        name: '',
-        phone: '',
-        email: '',
-        organization: '',
-        // Email
-        emailSubject: '',
-        emailBody: '',
-        // SMS/WhatsApp
-        message: '',
-    });
+    // Dynamic template fields based on selected template
+    const [templateData, setTemplateData] = useState({});
 
     const handleTemplateSelect = (template) => {
         setSelectedTemplate(template);
-        setQrCode(null); // Clear previous QR code
+        setTemplateData({});
+        setQrCode(null);
+    };
+
+    const handleCategoryChange = (category) => {
+        setSelectedCategory(category);
     };
 
     const handleInputChange = (e) => {
-        const { name, value } = e.target;
+        const { name, value, type, checked } = e.target;
         setFormData(prev => ({
             ...prev,
-            [name]: value
+            [name]: type === 'checkbox' ? checked : value
         }));
     };
 
-    const handleTemplateFieldChange = (e) => {
-        const { name, value } = e.target;
-        setTemplateFields(prev => ({
+    const handleTemplateDataChange = (field, value) => {
+        setTemplateData(prev => ({
             ...prev,
-            [name]: value
+            [field]: value
         }));
     };
 
@@ -72,26 +58,23 @@ export default function QRGenerator() {
     };
 
     const generateTextFromTemplate = () => {
-        switch (selectedTemplate.id) {
-            case 'url':
-                return templateFields.url;
-            case 'text':
-                return templateFields.text;
-            case 'wifi':
-                return `WIFI:T:${templateFields.encryption};S:${templateFields.ssid};P:${templateFields.password};;`;
-            case 'vcard':
-                return `BEGIN:VCARD\nVERSION:3.0\nFN:${templateFields.name}\nTEL:${templateFields.phone}\nEMAIL:${templateFields.email}\nORG:${templateFields.organization}\nEND:VCARD`;
-            case 'email':
-                return `mailto:${templateFields.email}?subject=${encodeURIComponent(templateFields.emailSubject)}&body=${encodeURIComponent(templateFields.emailBody)}`;
-            case 'sms':
-                return `sms:${templateFields.phone}?body=${encodeURIComponent(templateFields.message)}`;
-            case 'phone':
-                return `tel:${templateFields.phone}`;
-            case 'whatsapp':
-                return `https://wa.me/${templateFields.phone}?text=${encodeURIComponent(templateFields.message)}`;
-            default:
-                return '';
+        // If template has a generateUrl function, use it
+        if (selectedTemplate.generateUrl) {
+            return selectedTemplate.generateUrl(templateData);
         }
+
+        // Handle special cases
+        if (selectedTemplate.id === 'vcard') {
+            return `BEGIN:VCARD\nVERSION:3.0\nFN:${templateData.name || ''}\nTEL:${templateData.phone || ''}\nEMAIL:${templateData.email || ''}\nORG:${templateData.organization || ''}\nEND:VCARD`;
+        }
+
+        if (selectedTemplate.id === 'wifi') {
+            return selectedTemplate.generateUrl(templateData);
+        }
+
+        // For templates without generateUrl, return the first field value
+        const firstField = selectedTemplate.fields?.[0];
+        return templateData[firstField] || '';
     };
 
     const generateQRCode = async () => {
@@ -115,12 +98,18 @@ export default function QRGenerator() {
             });
 
             if (response.data.success) {
-                setQrCode(response.data.image);
+                let qrImage = response.data.image;
 
-                // Save to history
+                // Add watermark if enabled
+                if (formData.watermark) {
+                    qrImage = await addWatermarkToImage(qrImage);
+                }
+
+                setQrCode(qrImage);
+
                 saveToHistory({
                     text: textToEncode,
-                    image: response.data.image,
+                    image: qrImage,
                     template: selectedTemplate.id,
                     size: formData.size,
                 });
@@ -136,6 +125,44 @@ export default function QRGenerator() {
         }
     };
 
+    const addWatermarkToImage = async (base64Image) => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                canvas.width = img.width;
+                canvas.height = img.height;
+
+                // Draw original image
+                ctx.drawImage(img, 0, 0);
+
+                // Add watermark text
+                const fontSize = Math.max(10, img.width * 0.03);
+                ctx.font = `${fontSize}px Arial`;
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.textAlign = 'center';
+
+                const text = 'QRGenerator.com';
+                const textWidth = ctx.measureText(text).width;
+                const x = canvas.width / 2;
+                const y = canvas.height - fontSize * 0.5;
+
+                // Add background for better visibility
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.fillRect(x - textWidth / 2 - 5, y - fontSize, textWidth + 10, fontSize + 5);
+
+                // Draw text
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillText(text, x, y);
+
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.src = base64Image;
+        });
+    };
+
     const downloadQRCode = (format = 'png') => {
         if (!qrCode) {
             toast.error('Please generate a QR code first');
@@ -144,7 +171,7 @@ export default function QRGenerator() {
 
         const link = document.createElement('a');
         link.href = qrCode;
-        link.download = `qrcode-${Date.now()}.${format}`;
+        link.download = `qrcode-${selectedTemplate.id}-${Date.now()}.${format}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -152,246 +179,77 @@ export default function QRGenerator() {
     };
 
     const loadHistoryItem = (item) => {
-        setFormData(prev => ({
-            ...prev,
-            text: item.text,
-            size: item.size || 300,
-        }));
         setQrCode(item.image);
-
-        // Find and set template
         const template = templates.find(t => t.id === item.template) || templates[0];
         setSelectedTemplate(template);
-
         toast.success('Loaded from history');
     };
 
-    const renderTemplateFields = () => {
-        switch (selectedTemplate.id) {
-            case 'url':
-                return (
-                    <div>
-                        <label htmlFor="url" className="label">Website URL</label>
-                        <input
-                            type="url"
-                            id="url"
-                            name="url"
-                            value={templateFields.url}
-                            onChange={handleTemplateFieldChange}
-                            placeholder="https://example.com"
-                            className="input-field"
-                        />
-                    </div>
-                );
-
-            case 'text':
-                return (
-                    <div>
-                        <label htmlFor="text" className="label">Text Content</label>
-                        <textarea
-                            id="text"
-                            name="text"
-                            value={templateFields.text}
-                            onChange={handleTemplateFieldChange}
-                            placeholder="Enter any text..."
-                            className="input-field resize-none"
-                            rows="4"
-                        />
-                    </div>
-                );
-
-            case 'wifi':
-                return (
-                    <>
-                        <div>
-                            <label htmlFor="ssid" className="label">Network Name (SSID)</label>
-                            <input
-                                type="text"
-                                id="ssid"
-                                name="ssid"
-                                value={templateFields.ssid}
-                                onChange={handleTemplateFieldChange}
-                                placeholder="MyWiFi"
-                                className="input-field"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="password" className="label">Password</label>
-                            <input
-                                type="text"
-                                id="password"
-                                name="password"
-                                value={templateFields.password}
-                                onChange={handleTemplateFieldChange}
-                                placeholder="Enter password"
-                                className="input-field"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="encryption" className="label">Security Type</label>
-                            <select
-                                id="encryption"
-                                name="encryption"
-                                value={templateFields.encryption}
-                                onChange={handleTemplateFieldChange}
-                                className="input-field"
-                            >
-                                <option value="WPA">WPA/WPA2</option>
-                                <option value="WEP">WEP</option>
-                                <option value="nopass">Open (No password)</option>
-                            </select>
-                        </div>
-                    </>
-                );
-
-            case 'vcard':
-                return (
-                    <>
-                        <div>
-                            <label htmlFor="name" className="label">Full Name</label>
-                            <input
-                                type="text"
-                                id="name"
-                                name="name"
-                                value={templateFields.name}
-                                onChange={handleTemplateFieldChange}
-                                placeholder="John Doe"
-                                className="input-field"
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label htmlFor="phone" className="label">Phone</label>
-                                <input
-                                    type="tel"
-                                    id="phone"
-                                    name="phone"
-                                    value={templateFields.phone}
-                                    onChange={handleTemplateFieldChange}
-                                    placeholder="+1234567890"
-                                    className="input-field"
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="email" className="label">Email</label>
-                                <input
-                                    type="email"
-                                    id="email"
-                                    name="email"
-                                    value={templateFields.email}
-                                    onChange={handleTemplateFieldChange}
-                                    placeholder="john@example.com"
-                                    className="input-field"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label htmlFor="organization" className="label">Organization (Optional)</label>
-                            <input
-                                type="text"
-                                id="organization"
-                                name="organization"
-                                value={templateFields.organization}
-                                onChange={handleTemplateFieldChange}
-                                placeholder="Company Name"
-                                className="input-field"
-                            />
-                        </div>
-                    </>
-                );
-
-            case 'email':
-                return (
-                    <>
-                        <div>
-                            <label htmlFor="email" className="label">Email Address</label>
-                            <input
-                                type="email"
-                                id="email"
-                                name="email"
-                                value={templateFields.email}
-                                onChange={handleTemplateFieldChange}
-                                placeholder="recipient@example.com"
-                                className="input-field"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="emailSubject" className="label">Subject (Optional)</label>
-                            <input
-                                type="text"
-                                id="emailSubject"
-                                name="emailSubject"
-                                value={templateFields.emailSubject}
-                                onChange={handleTemplateFieldChange}
-                                placeholder="Email subject"
-                                className="input-field"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="emailBody" className="label">Message (Optional)</label>
-                            <textarea
-                                id="emailBody"
-                                name="emailBody"
-                                value={templateFields.emailBody}
-                                onChange={handleTemplateFieldChange}
-                                placeholder="Email message"
-                                className="input-field resize-none"
-                                rows="3"
-                            />
-                        </div>
-                    </>
-                );
-
-            case 'sms':
-            case 'whatsapp':
-                return (
-                    <>
-                        <div>
-                            <label htmlFor="phone" className="label">Phone Number</label>
-                            <input
-                                type="tel"
-                                id="phone"
-                                name="phone"
-                                value={templateFields.phone}
-                                onChange={handleTemplateFieldChange}
-                                placeholder="+1234567890"
-                                className="input-field"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="message" className="label">Message (Optional)</label>
-                            <textarea
-                                id="message"
-                                name="message"
-                                value={templateFields.message}
-                                onChange={handleTemplateFieldChange}
-                                placeholder="Your message"
-                                className="input-field resize-none"
-                                rows="3"
-                            />
-                        </div>
-                    </>
-                );
-
-            case 'phone':
-                return (
-                    <div>
-                        <label htmlFor="phone" className="label">Phone Number</label>
-                        <input
-                            type="tel"
-                            id="phone"
-                            name="phone"
-                            value={templateFields.phone}
-                            onChange={handleTemplateFieldChange}
-                            placeholder="+1234567890"
-                            className="input-field"
-                        />
-                    </div>
-                );
-
-            default:
-                return null;
+    const renderDynamicFields = () => {
+        if (!selectedTemplate.fields || selectedTemplate.fields.length === 0) {
+            return null;
         }
+
+        return (
+            <div className="space-y-3">
+                {selectedTemplate.fields.map((field) => {
+                    const placeholder = selectedTemplate.placeholder?.[field] || '';
+                    const fieldLabel = field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1');
+
+                    // Special handling for certain field types
+                    if (field === 'message' || field === 'body') {
+                        return (
+                            <div key={field}>
+                                <label className="label">{fieldLabel}</label>
+                                <textarea
+                                    value={templateData[field] || ''}
+                                    onChange={(e) => handleTemplateDataChange(field, e.target.value)}
+                                    placeholder={placeholder}
+                                    className="input-field resize-none"
+                                    rows="3"
+                                />
+                            </div>
+                        );
+                    }
+
+                    if (field === 'encryption') {
+                        return (
+                            <div key={field}>
+                                <label className="label">{fieldLabel}</label>
+                                <select
+                                    value={templateData[field] || 'WPA'}
+                                    onChange={(e) => handleTemplateDataChange(field, e.target.value)}
+                                    className="input-field"
+                                >
+                                    <option value="WPA">WPA/WPA2</option>
+                                    <option value="WEP">WEP</option>
+                                    <option value="nopass">Open (No password)</option>
+                                </select>
+                            </div>
+                        );
+                    }
+
+                    // Default text input
+                    const inputType = field.includes('email') ? 'email'
+                        : field.includes('phone') ? 'tel'
+                            : field.includes('url') || field.includes('Url') ? 'url'
+                                : 'text';
+
+                    return (
+                        <div key={field}>
+                            <label className="label">{fieldLabel}</label>
+                            <input
+                                type={inputType}
+                                value={templateData[field] || ''}
+                                onChange={(e) => handleTemplateDataChange(field, e.target.value)}
+                                placeholder={placeholder}
+                                className="input-field"
+                            />
+                        </div>
+                    );
+                })}
+            </div>
+        );
     };
 
     return (
@@ -424,20 +282,29 @@ export default function QRGenerator() {
                         {/* Left Side - Configuration */}
                         <div className="space-y-6">
                             <div className="card">
-                                <h3 className="text-lg font-semibold text-slate-900 mb-4">Configuration</h3>
+                                <h3 className="text-lg font-semibold text-slate-900 mb-4">Quick Link Templates</h3>
 
                                 {/* Template Selection */}
                                 <QRTemplates
                                     selectedTemplate={selectedTemplate}
                                     onSelectTemplate={handleTemplateSelect}
+                                    selectedCategory={selectedCategory}
+                                    onCategoryChange={handleCategoryChange}
                                 />
 
-                                <div className="divider"></div>
+                                {selectedTemplate && (
+                                    <>
+                                        <div className="divider"></div>
 
-                                {/* Template-specific fields */}
-                                <div className="space-y-3">
-                                    {renderTemplateFields()}
-                                </div>
+                                        {/* Dynamic Template Fields */}
+                                        <div>
+                                            <h4 className="text-sm font-semibold text-slate-700 mb-3">
+                                                {selectedTemplate.name} Details
+                                            </h4>
+                                            {renderDynamicFields()}
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             {/* Customization Options */}
@@ -449,6 +316,26 @@ export default function QRGenerator() {
                                     onLogoChange={handleLogoChange}
                                     currentLogo={formData.logo?.image}
                                 />
+
+                                <div className="divider"></div>
+
+                                {/* Watermark Toggle */}
+                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                                    <div>
+                                        <label className="font-medium text-slate-900 text-sm">Add Watermark</label>
+                                        <p className="text-xs text-slate-600 mt-0.5">Small "QRGenerator.com" text at bottom</p>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            name="watermark"
+                                            checked={formData.watermark}
+                                            onChange={handleInputChange}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
 
                                 <div className="divider"></div>
 
@@ -587,7 +474,7 @@ export default function QRGenerator() {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                                         </svg>
                                         <p className="text-sm font-medium">Your QR code will appear here</p>
-                                        <p className="text-xs mt-1">Configure and generate your code</p>
+                                        <p className="text-xs mt-1">Select a template and configure your code</p>
                                     </div>
                                 )}
                             </div>

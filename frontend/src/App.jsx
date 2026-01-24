@@ -15,6 +15,8 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import Blog from './pages/Blog';
 import Donate from './pages/Donate';
+import FAQ from './pages/FAQ';
+import Pricing from './pages/Pricing';
 import NotFound from './pages/NotFound';
 
 // Blog Articles
@@ -62,6 +64,8 @@ function App() {
             <Route path="/contact" element={<ContactUs />} />
             <Route path="/feedback" element={<Feedback />} />
             <Route path="/donate" element={<Donate />} />
+            <Route path="/faq" element={<FAQ />} />
+            <Route path="/pricing" element={<Pricing />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms-of-service" element={<TermsOfService />} />
 
