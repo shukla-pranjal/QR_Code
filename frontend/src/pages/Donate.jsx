@@ -7,7 +7,7 @@ export default function Donate() {
 
     const upiId1 = 'officalakumar@ybl';
     const upiId2 = 'pranjalmss2005@okhdfcbank';
-    const buyMeCoffeeUrl = 'https://buymeacoffee.com/pranjalkumar09';
+    const buyMeCoffeeUrl = 'https://buymeacoffee.com/shukla-pranjal';
 
     useEffect(() => {
         // Generate QR codes for UPI IDs
