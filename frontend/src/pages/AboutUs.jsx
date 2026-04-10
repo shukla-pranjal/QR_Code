@@ -101,7 +101,7 @@ export default function AboutUs() {
                                 </p>
                                 <div className="flex space-x-4">
                                     <a
-                                        href="https://github.com/PranjalKumar09"
+                                        href="https://github.com/shukla-pranjal"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center text-slate-200 hover:text-white transition-colors"
@@ -112,7 +112,7 @@ export default function AboutUs() {
                                         GitHub
                                     </a>
                                     <a
-                                        href="https://linkedin.com/in/pranjalkumar09"
+                                        href="https://linkedin.com/in/shukla-pranjal"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center text-slate-200 hover:text-white transition-colors"
