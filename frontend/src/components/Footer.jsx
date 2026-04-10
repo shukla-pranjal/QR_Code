@@ -89,7 +89,7 @@ export default function Footer() {
                         <p className="text-xs text-slate-500 mb-3">Backend & ML Developer</p>
                         <div className="flex space-x-3 mb-3">
                             <a
-                                href="https://github.com/PranjalKumar09"
+                                href="https://github.com/shukla-pranjal"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-slate-400 hover:text-white transition-colors"
@@ -100,7 +100,7 @@ export default function Footer() {
                                 </svg>
                             </a>
                             <a
-                                href="https://linkedin.com/in/pranjalkumar09"
+                                href="https://linkedin.com/in/shukla-pranjal"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-slate-400 hover:text-white transition-colors"
